@@ -147,7 +147,7 @@ function windowResized(){
 
 
 
-// LYRICS LOGIC
+// --- LYRICS DATA ---
 const lrcString = `[00:16.50]First night, heart racing in my chest
 [00:21.00] 
 [00:23.66]Every love, every touch, felt like we'd never rest
@@ -217,12 +217,15 @@ const lrcString = `[00:16.50]First night, heart racing in my chest
 [03:09.11]Day after day
 [03:12.00] `;
 
+// --- SELECTIONS ---
 const audio = document.querySelector('audio');
 const lyricPara = document.querySelector('.lyrics');
 
-// 1. Set audio to loop
+// --- INITIAL SETTINGS ---
 audio.loop = true;
+let experienceStarted = false;
 
+// Parse the LRC string into an array of objects
 const lyrics = lrcString.split('\n').map(line => {
     const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
     if (match) {
@@ -234,31 +237,45 @@ const lyrics = lrcString.split('\n').map(line => {
     return null;
 }).filter(l => l !== null);
 
+// --- START LOGIC ---
+// This ensures that the code doesn't start processing lyrics until 
+// the user clicks AND the audio hardware actually begins.
 window.addEventListener('click', () => {
-    if (audio.paused) {
-        audio.play();
+    if (!experienceStarted) {
+        audio.play().then(() => {
+            experienceStarted = true;
+        }).catch(e => {
+            console.error("Audio playback failed:", e);
+        });
     }
 }, { once: true });
 
+// --- LOOP RESET ---
 let lastIndex = -1;
 
-// 2. Reset the lyric index when the audio loops back to the start
+// Reset tracker when audio loops
 audio.addEventListener('seeked', () => {
     lastIndex = -1;
 });
 
+// --- SYNC LOGIC ---
 audio.addEventListener('timeupdate', () => {
+    // Only proceed if the experience has started and audio is moving
+    if (!experienceStarted || audio.currentTime === 0) return;
+
     const currentTime = audio.currentTime;
+    
+    // Find the latest lyric line that should be visible
     const index = lyrics.findLastIndex(l => currentTime >= l.time);
 
     if (index !== -1 && index !== lastIndex) {
         lastIndex = index;
         const currentLyric = lyrics[index];
 
-        // Start Fade Out
+        // 1. Start Fade Out (via CSS transition)
         lyricPara.classList.remove('show');
 
-        // Wait for fade-out transition, then update
+        // 2. Wait for fade-out, update text, then Fade In
         setTimeout(() => {
             if (currentLyric.text === "") {
                 lyricPara.innerText = "";
@@ -266,6 +283,6 @@ audio.addEventListener('timeupdate', () => {
                 lyricPara.innerText = currentLyric.text;
                 lyricPara.classList.add('show');
             }
-        }, 250); 
+        }, 250); // Matches your CSS timing
     }
 });
